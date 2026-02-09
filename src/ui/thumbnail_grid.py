@@ -15,6 +15,7 @@ from PyQt6.QtGui import QPixmap, QMouseEvent
 from PIL import Image
 
 from src.utils.image_utils import pil_to_qpixmap, composite_on_checkerboard
+from src.utils.i18n import tr, Translator
 
 
 class ThumbnailItem(QFrame):
@@ -115,7 +116,11 @@ class ThumbnailGrid(QWidget):
         super().__init__()
         self._thumbnails: List[ThumbnailItem] = []
         self._selected_index: int = -1
+        self._image_count: int = 0
         self._setup_ui()
+        
+        # Registrar para mudanças de idioma
+        Translator.instance().register_callback(self._update_texts)
     
     def _setup_ui(self):
         """Configura a interface do grid."""
@@ -124,8 +129,8 @@ class ThumbnailGrid(QWidget):
         layout.setSpacing(0)
         
         # Título
-        title = QLabel("Imagens")
-        title.setStyleSheet("""
+        self.title = QLabel(tr("images"))
+        self.title.setStyleSheet("""
             QLabel {
                 color: #fff;
                 font-size: 14px;
@@ -134,7 +139,7 @@ class ThumbnailGrid(QWidget):
                 background-color: #252526;
             }
         """)
-        layout.addWidget(title)
+        layout.addWidget(self.title)
         
         # Área de scroll
         self.scroll_area = QScrollArea()
@@ -158,7 +163,7 @@ class ThumbnailGrid(QWidget):
         layout.addWidget(self.scroll_area, 1)
         
         # Info
-        self.info_label = QLabel("Nenhum arquivo carregado")
+        self.info_label = QLabel(tr("no_file"))
         self.info_label.setStyleSheet("""
             QLabel {
                 color: #888;
@@ -168,6 +173,14 @@ class ThumbnailGrid(QWidget):
             }
         """)
         layout.addWidget(self.info_label)
+    
+    def _update_texts(self):
+        """Atualiza textos quando o idioma muda."""
+        self.title.setText(tr("images"))
+        if self._image_count > 0:
+            self.info_label.setText(tr("total_images", count=self._image_count))
+        else:
+            self.info_label.setText(tr("no_file"))
     
     def set_images(self, images: List[Image.Image]):
         """
@@ -191,7 +204,8 @@ class ThumbnailGrid(QWidget):
             col = i % columns
             self.grid_layout.addWidget(thumb, row, col)
         
-        self.info_label.setText(f"Total: {len(images)} imagens")
+        self._image_count = len(images)
+        self.info_label.setText(tr("total_images", count=self._image_count))
         
         # Selecionar primeira imagem
         if images:
@@ -203,6 +217,7 @@ class ThumbnailGrid(QWidget):
             thumb.deleteLater()
         self._thumbnails.clear()
         self._selected_index = -1
+        self._image_count = 0
         
         # Limpar layout
         while self.grid_layout.count():

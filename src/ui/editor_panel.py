@@ -15,6 +15,7 @@ from PyQt6.QtGui import QColor
 from PIL import Image
 
 from src.utils.image_utils import replace_color, apply_brightness, apply_contrast, apply_saturation
+from src.utils.i18n import tr, Translator
 
 
 class ColorButton(QPushButton):
@@ -47,7 +48,7 @@ class ColorButton(QPushButton):
     def _pick_color(self):
         """Abre o diálogo de seleção de cor."""
         initial = QColor(*self._color)
-        color = QColorDialog.getColor(initial, self, "Selecionar Cor")
+        color = QColorDialog.getColor(initial, self)
         if color.isValid():
             self._color = (color.red(), color.green(), color.blue())
             self._update_style()
@@ -78,6 +79,9 @@ class EditorPanel(QWidget):
         self._current_image: Optional[Image.Image] = None
         self._original_image: Optional[Image.Image] = None
         self._setup_ui()
+        
+        # Registrar para mudanças de idioma
+        Translator.instance().register_callback(self._update_texts)
     
     def _setup_ui(self):
         """Configura a interface do painel."""
@@ -86,19 +90,19 @@ class EditorPanel(QWidget):
         layout.setSpacing(12)
         
         # Título
-        title = QLabel("Ferramentas de Edição")
-        title.setStyleSheet("""
+        self.title = QLabel(tr("editing_tools"))
+        self.title.setStyleSheet("""
             QLabel {
                 color: #fff;
                 font-size: 14px;
                 font-weight: bold;
             }
         """)
-        layout.addWidget(title)
+        layout.addWidget(self.title)
         
         # === Seção: Troca de Cores ===
-        color_group = QGroupBox("🎨 Trocar Cor")
-        color_group.setStyleSheet("""
+        self.color_group = QGroupBox(tr("color_swap"))
+        self.color_group.setStyleSheet("""
             QGroupBox {
                 color: #ddd;
                 font-weight: bold;
@@ -112,11 +116,12 @@ class EditorPanel(QWidget):
                 left: 10px;
             }
         """)
-        color_layout = QVBoxLayout(color_group)
+        color_layout = QVBoxLayout(self.color_group)
         
         # Linha: Cor Original → Nova Cor
         color_row = QHBoxLayout()
-        color_row.addWidget(QLabel("De:"))
+        self.lbl_from = QLabel(tr("from"))
+        color_row.addWidget(self.lbl_from)
         self.color_from = ColorButton((255, 0, 255))
         color_row.addWidget(self.color_from)
         color_row.addWidget(QLabel("→"))
@@ -127,7 +132,8 @@ class EditorPanel(QWidget):
         
         # Tolerância
         tol_row = QHBoxLayout()
-        tol_row.addWidget(QLabel("Tolerância:"))
+        self.lbl_tolerance = QLabel(tr("tolerance"))
+        tol_row.addWidget(self.lbl_tolerance)
         self.tolerance_spin = QSpinBox()
         self.tolerance_spin.setRange(0, 128)
         self.tolerance_spin.setValue(10)
@@ -136,51 +142,51 @@ class EditorPanel(QWidget):
         color_layout.addLayout(tol_row)
         
         # Botão aplicar
-        self.btn_apply_color = QPushButton("Aplicar Troca de Cor")
+        self.btn_apply_color = QPushButton(tr("apply_color"))
         self.btn_apply_color.clicked.connect(self._apply_color_replacement)
         color_layout.addWidget(self.btn_apply_color)
         
-        layout.addWidget(color_group)
+        layout.addWidget(self.color_group)
         
         # === Seção: Filtros ===
-        filter_group = QGroupBox("🌈 Filtros")
-        filter_group.setStyleSheet(color_group.styleSheet())
-        filter_layout = QVBoxLayout(filter_group)
+        self.filter_group = QGroupBox(tr("filters"))
+        self.filter_group.setStyleSheet(self.color_group.styleSheet())
+        filter_layout = QVBoxLayout(self.filter_group)
         
         # Brilho
-        self.brightness_slider = self._create_slider("Brilho", -100, 100, 0)
+        self.brightness_slider = self._create_slider(tr("brightness"), -100, 100, 0)
         filter_layout.addLayout(self.brightness_slider[0])
         
         # Contraste
-        self.contrast_slider = self._create_slider("Contraste", -100, 100, 0)
+        self.contrast_slider = self._create_slider(tr("contrast"), -100, 100, 0)
         filter_layout.addLayout(self.contrast_slider[0])
         
         # Saturação
-        self.saturation_slider = self._create_slider("Saturação", -100, 100, 0)
+        self.saturation_slider = self._create_slider(tr("saturation"), -100, 100, 0)
         filter_layout.addLayout(self.saturation_slider[0])
         
         # Botão aplicar filtros
-        self.btn_apply_filters = QPushButton("Aplicar Filtros")
+        self.btn_apply_filters = QPushButton(tr("apply_filters"))
         self.btn_apply_filters.clicked.connect(self._apply_filters)
         filter_layout.addWidget(self.btn_apply_filters)
         
-        layout.addWidget(filter_group)
+        layout.addWidget(self.filter_group)
         
         # === Seção: Importar Imagem ===
-        import_group = QGroupBox("🖼️ Substituir Imagem")
-        import_group.setStyleSheet(color_group.styleSheet())
-        import_layout = QVBoxLayout(import_group)
+        self.import_group = QGroupBox(tr("replace_image"))
+        self.import_group.setStyleSheet(self.color_group.styleSheet())
+        import_layout = QVBoxLayout(self.import_group)
         
-        self.btn_import = QPushButton("Importar PNG...")
+        self.btn_import = QPushButton(tr("import_png"))
         self.btn_import.clicked.connect(self._import_image)
         import_layout.addWidget(self.btn_import)
         
-        layout.addWidget(import_group)
+        layout.addWidget(self.import_group)
         
         # === Botões de ação ===
         action_layout = QHBoxLayout()
         
-        self.btn_reset = QPushButton("↩️ Resetar")
+        self.btn_reset = QPushButton(tr("reset"))
         self.btn_reset.clicked.connect(self._reset_image)
         action_layout.addWidget(self.btn_reset)
         
@@ -188,6 +194,22 @@ class EditorPanel(QWidget):
         
         # Espaçador
         layout.addStretch()
+    
+    def _update_texts(self):
+        """Atualiza textos quando o idioma muda."""
+        self.title.setText(tr("editing_tools"))
+        self.color_group.setTitle(tr("color_swap"))
+        self.lbl_from.setText(tr("from"))
+        self.lbl_tolerance.setText(tr("tolerance"))
+        self.btn_apply_color.setText(tr("apply_color"))
+        self.filter_group.setTitle(tr("filters"))
+        self.brightness_slider[3].setText(tr("brightness"))
+        self.contrast_slider[3].setText(tr("contrast"))
+        self.saturation_slider[3].setText(tr("saturation"))
+        self.btn_apply_filters.setText(tr("apply_filters"))
+        self.import_group.setTitle(tr("replace_image"))
+        self.btn_import.setText(tr("import_png"))
+        self.btn_reset.setText(tr("reset"))
     
     def _create_slider(self, label: str, min_val: int, max_val: int, default: int):
         """Cria um slider com label e valor."""
@@ -209,7 +231,7 @@ class EditorPanel(QWidget):
         slider.valueChanged.connect(lambda v: value_lbl.setText(str(v)))
         layout.addWidget(value_lbl)
         
-        return (layout, slider, value_lbl)
+        return (layout, slider, value_lbl, lbl)
     
     def set_image(self, image: Optional[Image.Image]):
         """Define a imagem atual para edição."""
@@ -271,14 +293,14 @@ class EditorPanel(QWidget):
     def _import_image(self):
         """Importa uma imagem PNG para substituir."""
         if self._current_image is None:
-            QMessageBox.warning(self, "Aviso", "Selecione uma imagem primeiro.")
+            QMessageBox.warning(self, tr("warning"), tr("select_image"))
             return
         
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Importar Imagem PNG",
+            tr("import_png"),
             "",
-            "Imagens PNG (*.png);;Todos os arquivos (*.*)"
+            f"{tr('png_files')};;{tr('all_files')}"
         )
         
         if not file_path:
@@ -291,11 +313,10 @@ class EditorPanel(QWidget):
             if new_image.size != self._current_image.size:
                 reply = QMessageBox.question(
                     self,
-                    "Redimensionar",
-                    f"A imagem importada ({new_image.size[0]}x{new_image.size[1]}) "
-                    f"tem dimensões diferentes da original "
-                    f"({self._current_image.size[0]}x{self._current_image.size[1]}).\n\n"
-                    "Deseja redimensionar automaticamente?",
+                    tr("resize"),
+                    tr("resize_question",
+                       w1=new_image.size[0], h1=new_image.size[1],
+                       w2=self._current_image.size[0], h2=self._current_image.size[1]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 
@@ -317,8 +338,8 @@ class EditorPanel(QWidget):
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Erro",
-                f"Não foi possível abrir a imagem:\n{str(e)}"
+                tr("error"),
+                f"{tr('error')}: {str(e)}"
             )
     
     def _reset_image(self):

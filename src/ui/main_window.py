@@ -16,13 +16,14 @@ from PyQt6.QtWidgets import (
     QMessageBox, QApplication, QLabel
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QActionGroup
 
 from src.parsers.pic_parser import PicParser, PicParserError, UnsupportedVersionError
 from src.models.pic import Pic, PicImage
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.image_viewer import ImageViewer
 from src.ui.editor_panel import EditorPanel
+from src.utils.i18n import tr, Translator, LANGUAGES
 
 
 class MainWindow(QMainWindow):
@@ -39,6 +40,9 @@ class MainWindow(QMainWindow):
         self._setup_menu()
         self._setup_statusbar()
         self._apply_dark_theme()
+        
+        # Registrar para mudanças de idioma
+        Translator.instance().register_callback(self._update_texts)
     
     def _setup_ui(self):
         """Configura a interface principal."""
@@ -84,72 +88,86 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         
         # Menu Arquivo
-        file_menu = menubar.addMenu("&Arquivo")
+        self.file_menu = menubar.addMenu(tr("menu_file"))
         
-        open_action = QAction("&Abrir...", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self._open_file)
-        file_menu.addAction(open_action)
+        self.open_action = QAction(tr("menu_open"), self)
+        self.open_action.setShortcut(QKeySequence.StandardKey.Open)
+        self.open_action.triggered.connect(self._open_file)
+        self.file_menu.addAction(self.open_action)
         
-        save_action = QAction("&Salvar", self)
-        save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.triggered.connect(self._save_file)
-        file_menu.addAction(save_action)
+        self.save_action = QAction(tr("menu_save"), self)
+        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_action.triggered.connect(self._save_file)
+        self.file_menu.addAction(self.save_action)
         
-        save_as_action = QAction("Salvar &Como...", self)
-        save_as_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
-        save_as_action.triggered.connect(self._save_file_as)
-        file_menu.addAction(save_as_action)
+        self.save_as_action = QAction(tr("menu_save_as"), self)
+        self.save_as_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        self.save_as_action.triggered.connect(self._save_file_as)
+        self.file_menu.addAction(self.save_as_action)
         
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
         
-        export_action = QAction("&Exportar PNG...", self)
-        export_action.setShortcut(QKeySequence("Ctrl+E"))
-        export_action.triggered.connect(self._export_current_png)
-        file_menu.addAction(export_action)
+        self.export_action = QAction(tr("menu_export_png"), self)
+        self.export_action.setShortcut(QKeySequence("Ctrl+E"))
+        self.export_action.triggered.connect(self._export_current_png)
+        self.file_menu.addAction(self.export_action)
         
-        export_all_action = QAction("Exportar &Todas as PNGs...", self)
-        export_all_action.triggered.connect(self._export_all_pngs)
-        file_menu.addAction(export_all_action)
+        self.export_all_action = QAction(tr("menu_export_all"), self)
+        self.export_all_action.triggered.connect(self._export_all_pngs)
+        self.file_menu.addAction(self.export_all_action)
         
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
         
-        exit_action = QAction("&Sair", self)
-        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        self.exit_action = QAction(tr("menu_exit"), self)
+        self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        self.exit_action.triggered.connect(self.close)
+        self.file_menu.addAction(self.exit_action)
         
         # Menu Visualizar
-        view_menu = menubar.addMenu("&Visualizar")
+        self.view_menu = menubar.addMenu(tr("menu_view"))
         
-        zoom_in_action = QAction("Zoom &In", self)
-        zoom_in_action.setShortcut(QKeySequence("Ctrl++"))
-        zoom_in_action.triggered.connect(lambda: self.image_viewer._zoom_in())
-        view_menu.addAction(zoom_in_action)
+        self.zoom_in_action = QAction(tr("menu_zoom_in"), self)
+        self.zoom_in_action.setShortcut(QKeySequence("Ctrl++"))
+        self.zoom_in_action.triggered.connect(lambda: self.image_viewer._zoom_in())
+        self.view_menu.addAction(self.zoom_in_action)
         
-        zoom_out_action = QAction("Zoom &Out", self)
-        zoom_out_action.setShortcut(QKeySequence("Ctrl+-"))
-        zoom_out_action.triggered.connect(lambda: self.image_viewer._zoom_out())
-        view_menu.addAction(zoom_out_action)
+        self.zoom_out_action = QAction(tr("menu_zoom_out"), self)
+        self.zoom_out_action.setShortcut(QKeySequence("Ctrl+-"))
+        self.zoom_out_action.triggered.connect(lambda: self.image_viewer._zoom_out())
+        self.view_menu.addAction(self.zoom_out_action)
         
-        zoom_reset_action = QAction("&Tamanho Real", self)
-        zoom_reset_action.setShortcut(QKeySequence("Ctrl+0"))
-        zoom_reset_action.triggered.connect(lambda: self.image_viewer._zoom_reset())
-        view_menu.addAction(zoom_reset_action)
+        self.zoom_reset_action = QAction(tr("menu_zoom_reset"), self)
+        self.zoom_reset_action.setShortcut(QKeySequence("Ctrl+0"))
+        self.zoom_reset_action.triggered.connect(lambda: self.image_viewer._zoom_reset())
+        self.view_menu.addAction(self.zoom_reset_action)
+        
+        # Menu Idioma
+        self.lang_menu = menubar.addMenu(tr("menu_language"))
+        self.lang_action_group = QActionGroup(self)
+        self.lang_actions = {}
+        
+        for lang_code, lang_name in LANGUAGES.items():
+            action = QAction(lang_name, self)
+            action.setCheckable(True)
+            action.setChecked(lang_code == Translator.instance().get_language())
+            action.triggered.connect(lambda checked, lc=lang_code: self._change_language(lc))
+            self.lang_action_group.addAction(action)
+            self.lang_menu.addAction(action)
+            self.lang_actions[lang_code] = action
         
         # Menu Ajuda
-        help_menu = menubar.addMenu("A&juda")
+        self.help_menu = menubar.addMenu(tr("menu_help"))
         
-        about_action = QAction("&Sobre", self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
+        self.about_action = QAction(tr("menu_about"), self)
+        self.about_action.triggered.connect(self._show_about)
+        self.help_menu.addAction(self.about_action)
     
     def _setup_statusbar(self):
         """Configura a barra de status."""
         self.statusbar = QStatusBar()
         self.setStatusBar(self.statusbar)
         
-        self.status_file = QLabel("Nenhum arquivo carregado")
+        self.status_file = QLabel(tr("no_file_loaded"))
         self.status_image = QLabel("")
         self.status_modified = QLabel("")
         
@@ -161,13 +179,48 @@ class MainWindow(QMainWindow):
         """Aplica o tema escuro."""
         self.setStyleSheet(DARK_THEME_QSS)
     
+    def _change_language(self, lang_code: str):
+        """Muda o idioma da aplicação."""
+        Translator.instance().set_language(lang_code)
+        
+        # Atualizar checkmarks
+        for lc, action in self.lang_actions.items():
+            action.setChecked(lc == lang_code)
+    
+    def _update_texts(self):
+        """Atualiza todos os textos quando o idioma muda."""
+        # Menus
+        self.file_menu.setTitle(tr("menu_file"))
+        self.open_action.setText(tr("menu_open"))
+        self.save_action.setText(tr("menu_save"))
+        self.save_as_action.setText(tr("menu_save_as"))
+        self.export_action.setText(tr("menu_export_png"))
+        self.export_all_action.setText(tr("menu_export_all"))
+        self.exit_action.setText(tr("menu_exit"))
+        
+        self.view_menu.setTitle(tr("menu_view"))
+        self.zoom_in_action.setText(tr("menu_zoom_in"))
+        self.zoom_out_action.setText(tr("menu_zoom_out"))
+        self.zoom_reset_action.setText(tr("menu_zoom_reset"))
+        
+        self.lang_menu.setTitle(tr("menu_language"))
+        
+        self.help_menu.setTitle(tr("menu_help"))
+        self.about_action.setText(tr("menu_about"))
+        
+        # Status bar
+        if self.pic is None:
+            self.status_file.setText(tr("no_file_loaded"))
+        
+        self._update_status()
+    
     def _open_file(self):
         """Abre um arquivo .pic."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Abrir Tibia.pic",
+            tr("open_pic"),
             "",
-            "Arquivos PIC (*.pic);;Todos os arquivos (*.*)"
+            f"{tr('pic_files')};;{tr('all_files')}"
         )
         
         if not file_path:
@@ -196,12 +249,12 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"Tibia PIC Editor - {Path(file_path).name}")
             
         except UnsupportedVersionError as e:
-            QMessageBox.warning(self, "Versão não suportada", str(e))
+            QMessageBox.warning(self, tr("unsupported_version"), str(e))
         except PicParserError as e:
-            QMessageBox.critical(self, "Erro ao abrir", str(e))
+            QMessageBox.critical(self, tr("open_error"), str(e))
         except Exception as e:
             QMessageBox.critical(
-                self, "Erro", f"Erro inesperado ao abrir arquivo:\n{str(e)}"
+                self, tr("error"), f"{tr('open_error')}:\n{str(e)}"
             )
     
     def _save_file(self):
@@ -217,14 +270,14 @@ class MainWindow(QMainWindow):
     def _save_file_as(self):
         """Salva o arquivo com novo nome."""
         if self.pic is None:
-            QMessageBox.warning(self, "Aviso", "Nenhum arquivo carregado.")
+            QMessageBox.warning(self, tr("warning"), tr("no_file_loaded"))
             return
         
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Salvar Como",
+            tr("save_as"),
             "",
-            "Arquivos PIC (*.pic);;Todos os arquivos (*.*)"
+            f"{tr('pic_files')};;{tr('all_files')}"
         )
         
         if file_path:
@@ -244,18 +297,18 @@ class MainWindow(QMainWindow):
             self._update_status()
             
             QMessageBox.information(
-                self, "Salvo", "Arquivo salvo com sucesso!"
+                self, tr("saved"), tr("file_saved")
             )
             
         except Exception as e:
             QMessageBox.critical(
-                self, "Erro ao salvar", f"Não foi possível salvar:\n{str(e)}"
+                self, tr("save_error"), f"{tr('save_error')}:\n{str(e)}"
             )
     
     def _export_current_png(self):
         """Exporta a imagem atual como PNG."""
         if self.pic is None or self.current_image_index < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione uma imagem primeiro.")
+            QMessageBox.warning(self, tr("warning"), tr("select_image"))
             return
         
         pic_image = self.pic.images[self.current_image_index]
@@ -263,31 +316,31 @@ class MainWindow(QMainWindow):
         
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Exportar PNG",
+            tr("export_png"),
             f"image_{self.current_image_index + 1}.png",
-            "Imagens PNG (*.png)"
+            tr("png_files")
         )
         
         if file_path:
             try:
                 image.save(file_path, "PNG")
                 QMessageBox.information(
-                    self, "Exportado", f"Imagem exportada para:\n{file_path}"
+                    self, tr("exported"), tr("image_exported", path=file_path)
                 )
             except Exception as e:
                 QMessageBox.critical(
-                    self, "Erro", f"Não foi possível exportar:\n{str(e)}"
+                    self, tr("error"), tr("export_error", error=str(e))
                 )
     
     def _export_all_pngs(self):
         """Exporta todas as imagens como PNG."""
         if self.pic is None or not self.pic.images:
-            QMessageBox.warning(self, "Aviso", "Nenhum arquivo carregado.")
+            QMessageBox.warning(self, tr("warning"), tr("no_file_loaded"))
             return
         
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Selecionar pasta de destino"
+            tr("select_folder")
         )
         
         if not folder:
@@ -300,12 +353,12 @@ class MainWindow(QMainWindow):
                 image.save(str(file_path), "PNG")
             
             QMessageBox.information(
-                self, "Exportado",
-                f"{len(self.pic.images)} imagens exportadas para:\n{folder}"
+                self, tr("exported"),
+                tr("images_exported", count=len(self.pic.images), folder=folder)
             )
         except Exception as e:
             QMessageBox.critical(
-                self, "Erro", f"Erro durante exportação:\n{str(e)}"
+                self, tr("error"), tr("export_error", error=str(e))
             )
     
     def _on_image_selected(self, index: int):
@@ -355,12 +408,15 @@ class MainWindow(QMainWindow):
         if self.current_image_index >= 0:
             pic_image = self.pic.images[self.current_image_index]
             self.status_image.setText(
-                f"Imagem {self.current_image_index + 1}/{len(self.pic.images)} | "
-                f"{pic_image.pixel_width}×{pic_image.pixel_height}px"
+                tr("image_info",
+                   current=self.current_image_index + 1,
+                   total=len(self.pic.images),
+                   width=pic_image.pixel_width,
+                   height=pic_image.pixel_height)
             )
         
         if self.pic.is_modified():
-            self.status_modified.setText("● Modificado")
+            self.status_modified.setText(tr("modified"))
             self.status_modified.setStyleSheet("color: #ffa500;")
         else:
             self.status_modified.setText("")
@@ -369,11 +425,8 @@ class MainWindow(QMainWindow):
         """Mostra o diálogo Sobre."""
         QMessageBox.about(
             self,
-            "Sobre Tibia PIC Editor",
-            "<h2>Tibia PIC Editor</h2>"
-            "<p>Editor visual para arquivos Tibia.pic</p>"
-            "<p>Baseado no pic-editor de Elime1</p>"
-            "<p><small>Python + PyQt6</small></p>"
+            tr("about_title"),
+            tr("about_text")
         )
     
     def closeEvent(self, event):
@@ -381,8 +434,8 @@ class MainWindow(QMainWindow):
         if self.pic and self.pic.is_modified():
             reply = QMessageBox.question(
                 self,
-                "Salvar alterações?",
-                "Existem alterações não salvas. Deseja salvar antes de sair?",
+                tr("unsaved_changes"),
+                tr("unsaved_question"),
                 QMessageBox.StandardButton.Save |
                 QMessageBox.StandardButton.Discard |
                 QMessageBox.StandardButton.Cancel
