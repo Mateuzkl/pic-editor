@@ -1,0 +1,1 @@
+# src/editors package
