@@ -4,10 +4,10 @@ Painel de edição com ferramentas de edição de imagem.
 Contém controles para troca de cores, filtros, e importação.
 """
 
-from typing import Optional, Tuple, Callable
+from typing import Optional, Tuple
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QSlider, QFrame, QColorDialog,
+    QPushButton, QSlider, QColorDialog,
     QSpinBox, QGroupBox, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal

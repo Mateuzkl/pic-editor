@@ -8,10 +8,10 @@ em um grid scrollável.
 from typing import Optional, List
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QGridLayout,
-    QLabel, QFrame, QSizePolicy
+    QLabel, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap, QMouseEvent
+from PyQt6.QtGui import QMouseEvent
 from PIL import Image
 
 from src.utils.image_utils import pil_to_qpixmap, composite_on_checkerboard

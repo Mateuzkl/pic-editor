@@ -5,24 +5,23 @@ Integra todos os componentes: thumbnail grid, image viewer,
 editor panel, e barra de menu.
 """
 
-import os
-import sys
 from typing import Optional
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QMenuBar, QMenu, QStatusBar, QFileDialog,
-    QMessageBox, QApplication, QLabel
+    QMainWindow, QWidget, QHBoxLayout, QSplitter, QStatusBar, QFileDialog,
+    QMessageBox, QLabel, QTabWidget, QApplication
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence, QActionGroup
+from PyQt6.QtGui import QAction, QKeySequence, QActionGroup, QShortcut
 
 from src.parsers.pic_parser import PicParser, PicParserError, UnsupportedVersionError
-from src.models.pic import Pic, PicImage
+from src.models.pic import Pic
+from src.models.region import AtlasRegion
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.image_viewer import ImageViewer
 from src.ui.editor_panel import EditorPanel
+from src.ui.coordinate_inspector import CoordinateInspector
 from src.utils.i18n import tr, Translator, LANGUAGES
 
 
@@ -47,7 +46,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         """Configura a interface principal."""
         self.setWindowTitle("Tibia PIC Editor")
-        self.resize(1200, 800)
+        self.resize(1320, 840)
         
         # Widget central
         central = QWidget()
@@ -73,13 +72,19 @@ class MainWindow(QMainWindow):
         
         # Direita: Painel de edição
         self.editor_panel = EditorPanel()
-        self.editor_panel.setMinimumWidth(280)
-        self.editor_panel.setMaximumWidth(350)
         self.editor_panel.image_modified.connect(self._on_image_modified)
-        splitter.addWidget(self.editor_panel)
+        self.coordinate_inspector = CoordinateInspector(self.image_viewer)
+        self.coordinate_inspector.region_activated.connect(self._on_region_activated)
+        self.side_tabs = QTabWidget()
+        self.side_tabs.setMinimumWidth(380)
+        self.side_tabs.setMaximumWidth(520)
+        self.side_tabs.addTab(self.editor_panel, tr("mode_edit"))
+        self.side_tabs.addTab(self.coordinate_inspector, tr("mode_inspect"))
+        self.side_tabs.currentChanged.connect(self._on_mode_changed)
+        splitter.addWidget(self.side_tabs)
         
         # Proporções do splitter
-        splitter.setSizes([200, 600, 300])
+        splitter.setSizes([200, 700, 400])
         
         layout.addWidget(splitter)
     
@@ -140,6 +145,59 @@ class MainWindow(QMainWindow):
         self.zoom_reset_action.setShortcut(QKeySequence("Ctrl+0"))
         self.zoom_reset_action.triggered.connect(lambda: self.image_viewer._zoom_reset())
         self.view_menu.addAction(self.zoom_reset_action)
+
+        self.fit_action = QAction(tr("menu_fit"), self)
+        self.fit_action.triggered.connect(self.image_viewer.fit_image)
+        self.view_menu.addAction(self.fit_action)
+
+        self.actual_size_action = QAction(tr("menu_actual_size"), self)
+        self.actual_size_action.triggered.connect(self.image_viewer._zoom_reset)
+        self.view_menu.addAction(self.actual_size_action)
+
+        self.view_menu.addSeparator()
+        self.inspector_action = QAction(tr("mode_inspect"), self)
+        self.inspector_action.setShortcut(QKeySequence("Ctrl+I"))
+        self.inspector_action.triggered.connect(self._toggle_inspector)
+        self.view_menu.addAction(self.inspector_action)
+
+        self.sprite_grid_action = QAction(tr("inspector_sprite_grid"), self)
+        self.sprite_grid_action.triggered.connect(self.coordinate_inspector.toggle_sprite_grid)
+        self.view_menu.addAction(self.sprite_grid_action)
+
+        self.pixel_grid_action = QAction(tr("inspector_pixel_grid"), self)
+        self.pixel_grid_action.triggered.connect(self.coordinate_inspector.toggle_pixel_grid)
+        self.view_menu.addAction(self.pixel_grid_action)
+
+        self.copy_rect_action = QAction(tr("inspector_copy_rect"), self)
+        self.copy_rect_action.setShortcut(QKeySequence("Ctrl+C"))
+        self.copy_rect_action.triggered.connect(
+            lambda: self._copy_inspector_format("rect")
+        )
+        self.addAction(self.copy_rect_action)
+
+        self.copy_cpp_action = QAction(tr("inspector_copy_cpp"), self)
+        self.copy_cpp_action.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        self.copy_cpp_action.triggered.connect(
+            lambda: self._copy_inspector_format("constants")
+        )
+        self.addAction(self.copy_cpp_action)
+
+        # Single-key shortcuts belong to the canvas so they never steal text input.
+        self.fit_shortcut = QShortcut(QKeySequence("F"), self.image_viewer.canvas)
+        self.fit_shortcut.activated.connect(self.image_viewer.fit_image)
+        self.actual_size_shortcut = QShortcut(QKeySequence("1"), self.image_viewer.canvas)
+        self.actual_size_shortcut.activated.connect(self.image_viewer._zoom_reset)
+        self.sprite_grid_shortcut = QShortcut(QKeySequence("G"), self.image_viewer.canvas)
+        self.sprite_grid_shortcut.activated.connect(self.coordinate_inspector.toggle_sprite_grid)
+        self.pixel_grid_shortcut = QShortcut(QKeySequence("P"), self.image_viewer.canvas)
+        self.pixel_grid_shortcut.activated.connect(self.coordinate_inspector.toggle_pixel_grid)
+        for shortcut in (
+            self.fit_shortcut,
+            self.actual_size_shortcut,
+            self.sprite_grid_shortcut,
+            self.pixel_grid_shortcut,
+        ):
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
         
         # Menu Idioma
         self.lang_menu = menubar.addMenu(tr("menu_language"))
@@ -202,6 +260,16 @@ class MainWindow(QMainWindow):
         self.zoom_in_action.setText(tr("menu_zoom_in"))
         self.zoom_out_action.setText(tr("menu_zoom_out"))
         self.zoom_reset_action.setText(tr("menu_zoom_reset"))
+        self.fit_action.setText(tr("menu_fit"))
+        self.actual_size_action.setText(tr("menu_actual_size"))
+        self.inspector_action.setText(tr("mode_inspect"))
+        self.sprite_grid_action.setText(tr("inspector_sprite_grid"))
+        self.pixel_grid_action.setText(tr("inspector_pixel_grid"))
+        self.copy_rect_action.setText(tr("inspector_copy_rect"))
+        self.copy_cpp_action.setText(tr("inspector_copy_cpp"))
+        self.side_tabs.setTabText(0, tr("mode_edit"))
+        self.side_tabs.setTabText(1, tr("mode_inspect"))
+        self.coordinate_inspector.retranslate_ui()
         
         self.lang_menu.setTitle(tr("menu_language"))
         
@@ -241,6 +309,10 @@ class MainWindow(QMainWindow):
             
             # Atualizar thumbnail grid
             self.thumbnail_grid.set_images(images)
+            self.coordinate_inspector.set_pic(self.pic)
+            if images:
+                self.thumbnail_grid.select_image(0)
+                self._on_image_selected(0)
             
             # Atualizar status
             self.status_file.setText(f"📁 {Path(file_path).name}")
@@ -288,6 +360,7 @@ class MainWindow(QMainWindow):
         try:
             self.parser.save(self.pic, file_path)
             self.pic.file_path = file_path
+            self.coordinate_inspector.refresh_pic_identity()
             
             # Marcar como não modificado
             for img in self.pic.images:
@@ -373,6 +446,9 @@ class MainWindow(QMainWindow):
         
         self.image_viewer.set_image(rendered)
         self.editor_panel.set_image(rendered)
+        self.coordinate_inspector.set_context(
+            self.pic, index, pic_image, rendered
+        )
         
         self._update_status()
     
@@ -387,17 +463,51 @@ class MainWindow(QMainWindow):
         self.parser.update_image_from_pil(pic_image, new_image)
         
         # Atualizar visualização
-        self.image_viewer.set_image(new_image)
-        
-        # Atualizar thumbnail
         rendered_images = []
         for img in self.pic.images:
             rendered_images.append(self.parser.render_image(img))
+        current_rendered = rendered_images[self.current_image_index]
+        self.image_viewer.set_image(current_rendered)
+        self.coordinate_inspector.set_context(
+            self.pic,
+            self.current_image_index,
+            pic_image,
+            current_rendered,
+        )
         self.thumbnail_grid.set_images(rendered_images)
         self.thumbnail_grid.select_image(self.current_image_index)
-        
+
         self._update_status()
-    
+
+    def _on_mode_changed(self, index: int):
+        """Keep editing and coordinate selection as distinct modes."""
+        self.image_viewer.set_inspection_enabled(index == 1)
+        if index == 1:
+            self.image_viewer.canvas.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def _toggle_inspector(self):
+        self.side_tabs.setCurrentIndex(0 if self.side_tabs.currentIndex() == 1 else 1)
+
+    def _copy_inspector_format(self, format_name: str):
+        if self.side_tabs.currentIndex() == 1:
+            focus_widget = QApplication.focusWidget()
+            if format_name == "rect" and focus_widget is not None and hasattr(focus_widget, "copy"):
+                focus_widget.copy()
+                return
+            self.coordinate_inspector.copy_format(format_name)
+
+    def _on_region_activated(self, region: AtlasRegion):
+        if self.pic is None or not (0 <= region.image_index < len(self.pic.images)):
+            return
+        self.thumbnail_grid.select_image(region.image_index)
+        self._on_image_selected(region.image_index)
+        self.side_tabs.setCurrentIndex(1)
+        self.image_viewer.canvas.set_selection(
+            (region.x, region.y, region.width, region.height),
+            apply_snap=False,
+        )
+        self.image_viewer.center_on_selection()
+
     def _update_status(self):
         """Atualiza a barra de status."""
         if self.pic is None:
@@ -431,6 +541,7 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Evento de fechamento."""
+        self.coordinate_inspector.shutdown()
         if self.pic and self.pic.is_modified():
             reply = QMessageBox.question(
                 self,
@@ -562,6 +673,60 @@ QSpinBox::up-button, QSpinBox::down-button {
 
 QSpinBox::up-button:hover, QSpinBox::down-button:hover {
     background-color: #606060;
+}
+
+QWidget#coordinateInspector QPushButton {
+    padding: 6px 8px;
+    font-size: 11px;
+}
+
+QLineEdit, QTextEdit, QComboBox, QTreeWidget {
+    background-color: #252526;
+    color: #d4d4d4;
+    border: 1px solid #505050;
+    border-radius: 4px;
+    padding: 4px;
+    selection-background-color: #0e639c;
+}
+
+QTreeWidget::item:selected {
+    background-color: #094771;
+}
+
+QHeaderView::section {
+    background-color: #333333;
+    color: #d4d4d4;
+    border: none;
+    border-right: 1px solid #505050;
+    padding: 4px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+}
+
+QTabBar::tab {
+    background-color: #252526;
+    color: #aaaaaa;
+    padding: 8px 16px;
+    border: 1px solid #3c3c3c;
+}
+
+QTabBar::tab:selected {
+    background-color: #0e639c;
+    color: white;
+}
+
+QProgressBar {
+    background-color: #252526;
+    border: 1px solid #505050;
+    border-radius: 4px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #0e639c;
 }
 
 QScrollBar:vertical {

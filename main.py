@@ -14,8 +14,6 @@ if src_path not in sys.path:
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
-
 from src.ui.main_window import MainWindow
 
 

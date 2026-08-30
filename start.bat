@@ -1,4 +1,16 @@
 @echo off
+setlocal
+
+:: Always run from the directory that contains this launcher.
+:: This keeps requirements.txt and main.py resolvable when started elsewhere.
+cd /d "%~dp0"
+if errorlevel 1 (
+    echo [ERROR] Could not access the application directory:
+    echo %~dp0
+    pause
+    exit /b 1
+)
+
 title Tibia PIC Editor
 color 0A
 
@@ -24,10 +36,10 @@ echo.
 
 :: Check and install dependencies
 echo [2/3] Checking dependencies...
-py -c "import PyQt6" >nul 2>&1
+py -c "import PyQt6, PIL, numpy" >nul 2>&1
 if errorlevel 1 (
     echo       Installing dependencies...
-    py -m pip install -r requirements.txt --quiet
+    py -m pip install -r "%~dp0requirements.txt" --quiet
     if errorlevel 1 (
         echo.
         echo [ERROR] Failed to install dependencies!
@@ -46,7 +58,7 @@ echo.
 echo ============================================
 echo.
 
-py main.py
+py "%~dp0main.py"
 
 if errorlevel 1 (
     echo.
